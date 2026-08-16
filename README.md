@@ -44,6 +44,18 @@ dsh plugin --profile web add /path/to/dsh-auto-reviewer
 
 说明：`dsh plugin add /path/to/dir` 会以 `link:` 方式指向该目录，所以装配前必须在仓库目录执行 `npm install` 和 `npm run link-host`。
 
+### 权限图标补丁（可选）
+
+DSH 自带的权限选择弹框只为内置预设（`read-only` / `workspace-write` / `danger-full-access`）提供了图标，自定义的 `auto-review` 默认没有图标。本仓库提供一键补丁：
+
+```bash
+npm run patch-permission-icon
+systemctl --user restart dsh-web
+# 浏览器强制刷新（Ctrl+Shift+R）
+```
+
+补丁直接修改已安装的 dsh 客户端包（`dsh-client-ui-conversation`），幂等可重复执行；升级或重装 dsh 后需要重新运行。
+
 ### 本地构建
 
 ```bash

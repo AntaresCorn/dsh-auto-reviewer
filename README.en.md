@@ -44,6 +44,18 @@ dsh plugin --profile web add /path/to/dsh-auto-reviewer
 
 Note: `dsh plugin add /path/to/dir` installs through a `link:` to that directory, so you must run `npm install` and `npm run link-host` in the repo before installing.
 
+### Permission icon patch (optional)
+
+The DSH permission selector only ships icons for the built-in presets (`read-only` / `workspace-write` / `danger-full-access`); a custom `auto-review` preset has no icon by default. This repo provides a one-shot patch:
+
+```bash
+npm run patch-permission-icon
+systemctl --user restart dsh-web
+# hard refresh the browser (Ctrl+Shift+R)
+```
+
+The patch edits the installed DSH client package (`dsh-client-ui-conversation`) directly. It is idempotent and safe to run repeatedly; re-run it after upgrading or reinstalling dsh.
+
 ### Local build
 
 ```bash
