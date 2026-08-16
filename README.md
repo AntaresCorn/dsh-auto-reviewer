@@ -15,6 +15,7 @@
 
 - **新增权限预设**：通过 `cordis.patch.yml` 扩展官方 `permission-presets` 表，UI 的权限下拉框会多出 `auto-review` 选项，选择后写入 `workspace-write + ask`，并记录为 `auto-review` 预设。
 - **自动授权提示**：自动放行/拒绝时都会向对话流注入一条 Codex 风格的提示（放行：`Automatic approval review approved (risk: low, authorization: unknown): Auto-review returned a low-risk allow decision.`；拒绝：`Automatic approval review denied (risk: high, authorization: unknown): Auto-review returned a high-risk deny decision.`），方便追踪哪些提权被自动裁决。
+- **自动补齐权限图标**：安装插件后会自动为已安装的 DSH 权限选择弹框补上 `auto-review` 图标（盾牌+星芒），与内置预设风格一致；升级或重装 dsh 后重启服务即自动重新补齐，浏览器强制刷新后生效。
 - **审批瀑布前置**：使用 `ctx.on('approval/request', handler, true)` 把自动审查器放在交互式 UI 应答者之前；返回 `allowed-once`/`rejected` 即直接裁决，调用 `next()` 则正常弹出人工确认。
 - **多级安全策略**：
   - 快速放行：`workspace-write` 且非高风险；
@@ -43,18 +44,6 @@ dsh plugin --profile web add /path/to/dsh-auto-reviewer
 ```
 
 说明：`dsh plugin add /path/to/dir` 会以 `link:` 方式指向该目录，所以装配前必须在仓库目录执行 `npm install` 和 `npm run link-host`。
-
-### 权限图标补丁（可选）
-
-DSH 自带的权限选择弹框只为内置预设（`read-only` / `workspace-write` / `danger-full-access`）提供了图标，自定义的 `auto-review` 默认没有图标。本仓库提供一键补丁：
-
-```bash
-npm run patch-permission-icon
-systemctl --user restart dsh-web
-# 浏览器强制刷新（Ctrl+Shift+R）
-```
-
-补丁直接修改已安装的 dsh 客户端包（`dsh-client-ui-conversation`），幂等可重复执行；升级或重装 dsh 后需要重新运行。
 
 ### 本地构建
 

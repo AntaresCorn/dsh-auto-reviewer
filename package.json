@@ -33,8 +33,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "link-host": "bash scripts/link-host-deps.sh",
-    "patch-permission-icon": "node scripts/patch-permission-icon.mjs"
+    "link-host": "bash scripts/link-host-deps.sh"
   },
   "keywords": [
     "dsh-plugin",

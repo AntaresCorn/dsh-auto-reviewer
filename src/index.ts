@@ -1,23 +1,12 @@
-/**
- * @dsh-external/dsh-auto-reviewer — Codex-style "approve for me" permission mode.
- *
- * Adds an `auto-review` entry to the DSH permission preset list and mounts an
- * `approval/request` answerer that automatically decides sandbox escalations:
- *
- * - clearly safe operations are approved automatically;
- * - risky / ambiguous operations are forwarded to the human (or rejected when
- *   they are critical and the user has not confirmed them);
- * - optional LLM review is used for the ambiguous middle ground.
- *
- * The listener is prepended to the approval waterfall so it runs before the
- * interactive UI answerer. When it calls `next()`, the normal human approval
- * prompt appears.
- */
 import type { Context } from '@deepseek-ai/cordis'
 import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ApprovalRequest, ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import '@deepseek-ai/dsh-permission-presets'
 import z from '@deepseek-ai/schemastery'
+import { execFileSync } from 'node:child_process'
+import { copyFileSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 export const name = '@dsh-external/dsh-auto-reviewer'
 export const inject = ['approval', 'permissionPresets', 'llm']
@@ -294,7 +283,77 @@ async function runLlmReview(
   }
 }
 
+// ── auto-review permission icon (applied on plugin load) ──────────────────
+// The official DSH permission selector only ships icons for its built-in
+// presets. This plugin keeps the glyph set symmetric by idempotently patching
+// the installed conversation client bundle on load, so installing the plugin
+// is the only step needed (a browser refresh re-fetches the client bundle).
+const ICON_PACKAGE = '@deepseek-ai/dsh-client-ui-conversation'
+const ICON_ANCHOR = 'd: "M9.10094 9.8114V11.5H7.59888V9.8114H9.10094Z",'
+const ICON_MARK = '"auto-review": (0, react_jsx_runtime.jsxs)("svg", {'
+
+function permissionIconClientPath(): string {
+  const root = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
+  return join(root, '@deepseek-ai/dsh/node_modules', ICON_PACKAGE, 'lib/client.js')
+}
+
+function permissionIconGlyph(): string {
+  return [
+    '\t\t\t"auto-review": (0, react_jsx_runtime.jsxs)("svg", {',
+    '\t\t\t\twidth: "16",',
+    '\t\t\t\theight: "16",',
+    '\t\t\t\tviewBox: "0 0 16 16",',
+    '\t\t\t\tfill: "none",',
+    '\t\t\t\t"aria-hidden": true,',
+    '\t\t\t\tchildren: [',
+    '\t\t\t\t\t(0, react_jsx_runtime.jsx)("path", {',
+    '\t\t\t\t\t\td: shieldOutline,',
+    '\t\t\t\t\t\tstroke: "currentColor",',
+    '\t\t\t\t\t\tstrokeWidth: "1.31831",',
+    '\t\t\t\t\t\tstrokeLinejoin: "round"',
+    '\t\t\t\t\t}),',
+    '\t\t\t\t\t(0, react_jsx_runtime.jsx)("path", {',
+    '\t\t\t\t\t\td: "M8 4.4L9.3 6.7L11.6 8L9.3 9.3L8 11.6L6.7 9.3L4.4 8L6.7 6.7Z",',
+    '\t\t\t\t\t\tfill: "currentColor"',
+    '\t\t\t\t\t})',
+    '\t\t\t\t]',
+    '\t\t\t})'
+  ].join('\n')
+}
+
+function applyPermissionIconPatch(ctx: Context): void {
+  try {
+    const file = permissionIconClientPath()
+    let source = readFileSync(file, 'utf8')
+    if (source.includes(ICON_MARK)) return
+    const anchorAt = source.indexOf(ICON_ANCHOR)
+    if (anchorAt < 0) return
+    const closeAt = source.indexOf('};', anchorAt)
+    if (closeAt < 0) return
+    const before = source.slice(0, closeAt)
+    const jsxClose = before.lastIndexOf('})')
+    if (jsxClose < 0) return
+    const head = before.slice(0, jsxClose + 2) + ',' + '\n\t\t\t' + permissionIconGlyph() + '\n\t\t'
+    const patched = head + source.slice(closeAt)
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-auto-reviewer-icon-'))
+    const check = join(dir, 'client-check.mjs')
+    copyFileSync(file, check)
+    try {
+      writeFileSync(check, patched)
+      execFileSync(process.execPath, ['--check', check], { stdio: 'pipe' })
+    } finally {
+      unlinkSync(check)
+    }
+    writeFileSync(file, patched)
+    ctx.logger?.warn?.('[dsh-auto-reviewer] permission icon patch applied: %s', file)
+  } catch (error) {
+    ctx.logger?.warn?.('[dsh-auto-reviewer] permission icon patch skipped: %s', String(error))
+  }
+}
+
 export function apply(ctx: Context, config: Config): void {
+  applyPermissionIconPatch(ctx)
+
   // Prepend so this reviewer runs before the interactive UI answerer.
   ctx.on('approval/request', async (req: ApprovalRequest, next: () => Promise<ApprovalOutcome>): Promise<ApprovalOutcome> => {
     try {

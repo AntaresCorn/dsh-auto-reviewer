@@ -1,18 +1,3 @@
-/**
- * @dsh-external/dsh-auto-reviewer — Codex-style "approve for me" permission mode.
- *
- * Adds an `auto-review` entry to the DSH permission preset list and mounts an
- * `approval/request` answerer that automatically decides sandbox escalations:
- *
- * - clearly safe operations are approved automatically;
- * - risky / ambiguous operations are forwarded to the human (or rejected when
- *   they are critical and the user has not confirmed them);
- * - optional LLM review is used for the ambiguous middle ground.
- *
- * The listener is prepended to the approval waterfall so it runs before the
- * interactive UI answerer. When it calls `next()`, the normal human approval
- * prompt appears.
- */
 import type { Context } from '@deepseek-ai/cordis';
 import '@deepseek-ai/dsh-permission-presets';
 import z from '@deepseek-ai/schemastery';
