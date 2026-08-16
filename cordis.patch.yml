@@ -36,7 +36,7 @@
       config:
         presetName: auto-review
         autoApproveWorkspaceWrite: true
-        autoApproveDangerFullAccess: false
+        autoApproveDangerFullAccess: true
         autoApproveUserConfirmed: true
         askOnAmbiguous: true
         rejectCritical: true

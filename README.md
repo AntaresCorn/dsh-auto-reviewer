@@ -12,6 +12,7 @@
 ## 特性
 
 - **新增权限预设**：通过 `cordis.patch.yml` 扩展官方 `permission-presets` 表，UI 的权限下拉框会多出 `auto-review` 选项，选择后写入 `workspace-write + ask`，并记录为 `auto-review` 预设。
+- **自动授权提示**：自动放行/拒绝时都会向对话流注入一条 Codex 风格的提示（放行：`Automatic approval review approved (risk: low, authorization: unknown): Auto-review returned a low-risk allow decision.`；拒绝：`Automatic approval review denied (risk: high, authorization: unknown): Auto-review returned a high-risk deny decision.`），方便追踪哪些提权被自动裁决。
 - **审批瀑布前置**：使用 `ctx.on('approval/request', handler, true)` 把自动审查器放在交互式 UI 应答者之前；返回 `allowed-once`/`rejected` 即直接裁决，调用 `next()` 则正常弹出人工确认。
 - **多级安全策略**：
   - 快速放行：`workspace-write` 且非高风险；
@@ -25,22 +26,28 @@
 ### 作为 GitHub 仓库装配（推荐）
 
 ```bash
-dsh plugin --profile web add github:<你的用户名>/dsh-auto-reviewer
+dsh plugin --profile web add github:AntaresCorn/dsh-auto-reviewer
 ```
 
-或手动 clone 后装配（仓库已提交编译好的 `lib/`，无需本地构建）：
+或手动 clone 后装配（仓库已提交编译好的 `lib/`；本地目录装配前需先装好开发依赖并链接宿主包）：
 
 ```bash
-git clone https://github.com/<你的用户名>/dsh-auto-reviewer.git
+git clone https://github.com/AntaresCorn/dsh-auto-reviewer.git
+cd dsh-auto-reviewer
+npm install
+npm run link-host
+cd ..
 dsh plugin --profile web add /path/to/dsh-auto-reviewer
 ```
 
-### 开发 / 热注入
+说明：`dsh plugin add /path/to/dir` 会以 `link:` 方式指向该目录，所以装配前必须在仓库目录执行 `npm install` 和 `npm run link-host`。更省心的方式是直接装配仓库里的 tgz：`dsh plugin --profile web add /path/to/dsh-external-dsh-auto-reviewer-0.0.1.tgz`。
+
+### 本地构建
 
 ```bash
-DSH_CHECKOUT=/path/to/deepseek-harness bash scripts/build.sh
-# 在已运行 dsh-super-injector 的环境中：
-# dev_inject_plugin /path/to/dsh-auto-reviewer
+npm install          # 安装 typescript / @types/node 等开发依赖
+npm run link-host    # 把 node_modules/@deepseek-ai 软链到已安装的 dsh 宿主包（避免重复副本）
+npm run build        # src/ → lib/（仓库已提交编译产物，普通用户无需构建）
 ```
 
 安装/注入后**必须完全重启 DeepSeek Harness**，新建会话，在权限选择器中选择 **auto-review**。
@@ -70,7 +77,7 @@ DSH_CHECKOUT=/path/to/deepseek-harness bash scripts/build.sh
 | `llmModel` | `''` | 审查 LLM model，留空使用当前会话 |
 | `maxContextMessages` | `12` | 参与判断的最近用户消息数 |
 | `autoApproveWorkspaceWrite` | `true` | 自动放行非高风险 workspace-write 提权 |
-| `autoApproveDangerFullAccess` | `false` | 自动放行非高风险 danger-full-access 提权 |
+| `autoApproveDangerFullAccess` | `true` | 自动放行非高风险 danger-full-access 提权 |
 | `autoApproveUserConfirmed` | `true` | 用户明确确认且非致命破坏时放行 |
 | `askOnAmbiguous` | `true` | 模糊时转人工；`false` 则拒绝 |
 | `rejectCritical` | `true` | 未确认的致命破坏操作直接拒绝 |
@@ -93,7 +100,8 @@ DSH_CHECKOUT=/path/to/deepseek-harness bash scripts/build.sh
 dsh-auto-reviewer/
 ├── cordis.patch.yml      # 扩展权限表 + 装配插件
 ├── package.json          # 插件包元数据（dsh.bundle.patch）
-├── scripts/build.sh      # DSH checkout 构建脚本
+├── scripts/build.sh      # tsc 构建脚本（无需 DSH checkout）
+├── scripts/link-host-deps.sh # 软链宿主 @deepseek-ai 依赖（避免重复副本）
 ├── src/index.ts          # 自动审查实现
 └── README.md
 ```

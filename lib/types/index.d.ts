@@ -13,9 +13,9 @@
  * interactive UI answerer. When it calls `next()`, the normal human approval
  * prompt appears.
  */
-import type { Context } from 'cordis';
+import type { Context } from '@deepseek-ai/cordis';
 import '@deepseek-ai/dsh-permission-presets';
-import z from 'schemastery';
+import z from '@deepseek-ai/schemastery';
 export declare const name = "@dsh-external/dsh-auto-reviewer";
 export declare const inject: string[];
 export interface Config {
