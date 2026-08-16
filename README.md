@@ -40,7 +40,7 @@ cd ..
 dsh plugin --profile web add /path/to/dsh-auto-reviewer
 ```
 
-说明：`dsh plugin add /path/to/dir` 会以 `link:` 方式指向该目录，所以装配前必须在仓库目录执行 `npm install` 和 `npm run link-host`。更省心的方式是直接装配仓库里的 tgz：`dsh plugin --profile web add /path/to/dsh-external-dsh-auto-reviewer-0.0.1.tgz`。
+说明：`dsh plugin add /path/to/dir` 会以 `link:` 方式指向该目录，所以装配前必须在仓库目录执行 `npm install` 和 `npm run link-host`。
 
 ### 本地构建
 
@@ -54,7 +54,7 @@ npm run build        # src/ → lib/（仓库已提交编译产物，普通用�
 
 > ⚠️ 经验教训（2026-08-16 实测）：不要在运行中的对话里用 `dev_install_package` / `dev_inject_plugin` 热装载后继续对话。
 > 热装载路径与正式 bundle 装配路径不一致，可能导致 loader/agent 上下文损坏（`Cannot read properties of undefined (reading 'enabled')`）。
-> 正式安装请走官方 `dsh plugin --profile web add <目录或 tgz>`，然后 `systemctl --user restart dsh-web`（或对应重启方式）。
+> 正式安装请走官方 `dsh plugin --profile web add <目录>`，然后 `systemctl --user restart dsh-web`（或对应重启方式）。
 > 开发目录的 `node_modules` 只用于本地编译/类型检查，不要让它成为 profile link 指向的运行时依赖来源。
 
 ## 使用方法
