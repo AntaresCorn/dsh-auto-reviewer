@@ -1,3 +1,5 @@
+[English](README.en.md) | [中文](README.md)
+
 # dsh-auto-reviewer — Codex-style "approve for me" permission mode
 
 为 DeepSeek Harness 提供类似 Codex Auto Reviewer / "approve for me" 的权限模式：
@@ -103,7 +105,8 @@ dsh-auto-reviewer/
 ├── scripts/build.sh      # tsc 构建脚本（无需 DSH checkout）
 ├── scripts/link-host-deps.sh # 软链宿主 @deepseek-ai 依赖（避免重复副本）
 ├── src/index.ts          # 自动审查实现
-└── README.md
+├── README.md             # 中文说明
+└── README.en.md          # English README
 ```
 
 ## License
