@@ -1,0 +1,47 @@
+# dsh-auto-reviewer bundle layer.
+#
+# 1. Replaces the permission preset table so the UI exposes the new
+#    `auto-review` option alongside the built-in presets.
+# 2. Inserts this plugin as a loader entry. The plugin prepends an
+#    approval/request answerer that implements the auto-review behavior.
+
+- id: permission
+  name: '@deepseek-ai/dsh-permission-presets'
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+        name: read-only
+        description: Read-only access; wider retries require approval.
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+        name: workspace-write
+        description: Write inside the workspace and permitted temporary directories; wider retries require approval.
+      auto-review:
+        sandbox: workspace-write
+        approval: ask
+        name: auto-review
+        description: Codex-style approve for me — safe sandbox escalations are approved automatically, risky ones ask the user.
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never
+        name: danger-full-access
+        description: Full file access without approval prompts.
+
+- insert:
+    - id: dsh-auto-reviewer
+      name: '@dsh-external/dsh-auto-reviewer'
+      config:
+        presetName: auto-review
+        autoApproveWorkspaceWrite: true
+        autoApproveDangerFullAccess: false
+        autoApproveUserConfirmed: true
+        askOnAmbiguous: true
+        rejectCritical: true
+        useLlm: true
+        timeoutMs: 10000
+        blocklist: []
+        blocklistMode: reject
+        extraInstructions: ''
