@@ -28,7 +28,7 @@
 dsh plugin --profile web add github:<你的用户名>/dsh-auto-reviewer
 ```
 
-或手动 clone 后装配：
+或手动 clone 后装配（仓库已提交编译好的 `lib/`，无需本地构建）：
 
 ```bash
 git clone https://github.com/<你的用户名>/dsh-auto-reviewer.git
