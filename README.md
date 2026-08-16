@@ -43,7 +43,12 @@ DSH_CHECKOUT=/path/to/deepseek-harness bash scripts/build.sh
 # dev_inject_plugin /path/to/dsh-auto-reviewer
 ```
 
-安装/注入后**完全重启 DeepSeek Harness**，新建会话，在权限选择器中选择 **auto-review**。
+安装/注入后**必须完全重启 DeepSeek Harness**，新建会话，在权限选择器中选择 **auto-review**。
+
+> ⚠️ 经验教训（2026-08-16 实测）：不要在运行中的对话里用 `dev_install_package` / `dev_inject_plugin` 热装载后继续对话。
+> 热装载路径与正式 bundle 装配路径不一致，可能导致 loader/agent 上下文损坏（`Cannot read properties of undefined (reading 'enabled')`）。
+> 正式安装请走官方 `dsh plugin --profile web add <目录或 tgz>`，然后 `systemctl --user restart dsh-web`（或对应重启方式）。
+> 开发目录的 `node_modules` 只用于本地编译/类型检查，不要让它成为 profile link 指向的运行时依赖来源。
 
 ## 使用方法
 

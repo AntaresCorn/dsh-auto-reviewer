@@ -17,11 +17,10 @@ import type { Context } from 'cordis'
 import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ApprovalRequest, ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import '@deepseek-ai/dsh-permission-presets'
-import '@deepseek-ai/dsh-sandbox-policy'
 import z from 'schemastery'
 
 export const name = '@dsh-external/dsh-auto-reviewer'
-export const inject = ['approval', 'permissionPresets', 'llm', 'sandboxPolicy']
+export const inject = ['approval', 'permissionPresets', 'llm']
 
 export interface Config {
   /** The permission preset name this plugin implements. */
