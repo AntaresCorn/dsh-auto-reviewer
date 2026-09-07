@@ -64,4 +64,8 @@ export declare const Config: z<Schemastery.ObjectS<{
     blocklistMode: z<"reject" | "ask", "reject" | "ask">;
     extraInstructions: z<string, string>;
 }>>;
+/** Pure text transform backing the on-load patch. Returns the input unchanged
+ * when the `auto-review` glyph is already present; throws when the current DSH
+ * bundle layout is unrecognized so callers can surface the skip reason. */
+export declare function patchPermissionIconSource(source: string): string;
 export declare function apply(ctx: Context, config: Config): void;
