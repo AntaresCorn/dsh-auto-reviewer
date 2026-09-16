@@ -14,7 +14,16 @@
 ## 特性
 
 - **新增权限预设**：通过 `cordis.patch.yml` 扩展官方 `permission-presets` 表，UI 的权限下拉框会多出 `auto-review` 选项，选择后写入 `workspace-write + ask`，并记录为 `auto-review` 预设。
-- **自动授权提示**：自动放行/拒绝时都会向对话流注入一条 Codex 风格的提示（放行：`Automatic approval review approved (risk: low, authorization: unknown): Auto-review returned a low-risk allow decision.`；拒绝：`Automatic approval review denied (risk: high, authorization: unknown): Auto-review returned a high-risk deny decision.`），方便追踪哪些提权被自动裁决。
+- **结构化自动授权提示**：自动放行/拒绝时注入一条 `form: notice` 的插件消息——折叠行显示单行摘要（如 `approved(low) · bash · workspace-write · npm test`），展开显示多行详情：判定结果、风险等级、授权依据、工具名、请求的沙箱模式、判断依据（命中的规则名 / 快路径 / LLM 理由）与实际命令（单行截断到 160 字符）：
+
+  ```text
+  Automatic approval review approved (risk: low, authorization: user-confirmed)
+  tool: bash
+  mode: workspace-write
+  basis: auto-approve: workspace-write escalation without a high-risk rule
+  request: run the tests
+  command: npm test
+  ```
 - **自动补齐权限图标**：安装插件后会自动为已安装的 DSH 权限选择弹框补上 `auto-review` 图标（盾牌+星芒），与内置预设风格一致；升级或重装 dsh 后重启服务即自动重新补齐，浏览器强制刷新后生效。
 - **审批瀑布前置**：使用 `ctx.on('approval/request', handler, true)` 把自动审查器放在交互式 UI 应答者之前；返回 `allowed-once`/`rejected` 即直接裁决，调用 `next()` 则正常弹出人工确认。
 - **多级安全策略**：
@@ -51,6 +60,7 @@ dsh plugin --profile web add /path/to/dsh-auto-reviewer
 npm install          # 安装 typescript / @types/node 等开发依赖
 npm run link-host    # 把 node_modules/@deepseek-ai 软链到已安装的 dsh 宿主包（避免重复副本）
 npm run build        # src/ → lib/（仓库已提交编译产物，普通用户无需构建）
+npm test             # node:test 单测：审批通知格式化与各决策分支
 ```
 
 安装/注入后**必须完全重启 DeepSeek Harness**，新建会话，在权限选择器中选择 **auto-review**。

@@ -14,7 +14,16 @@ A permission mode for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek
 ## Features
 
 - **New permission preset**: extends the official `permission-presets` table through `cordis.patch.yml`. The UI permission dropdown gains an `auto-review` option, which writes `workspace-write + ask` and records the `auto-review` preset.
-- **Auto-decision notices**: whenever the plugin auto-approves or auto-rejects, it injects a Codex-style notice into the conversation flow (approve: `Automatic approval review approved (risk: low, authorization: unknown): Auto-review returned a low-risk allow decision.`; deny: `Automatic approval review denied (risk: high, authorization: unknown): Auto-review returned a high-risk deny decision.`), so you can see which escalations were decided automatically.
+- **Structured auto-decision notices**: whenever the plugin auto-approves or auto-rejects, it injects a `form: notice` plugin message. The collapsed transcript row shows a one-line summary (e.g. `approved(low) · bash · workspace-write · npm test`); expanding it shows multi-line detail: outcome, risk level, authorization basis, tool, requested sandbox mode, the decision basis (matched rule name / fast path / LLM rationale) and the actual command (flattened to one line, capped at 160 chars):
+
+  ```text
+  Automatic approval review approved (risk: low, authorization: user-confirmed)
+  tool: bash
+  mode: workspace-write
+  basis: auto-approve: workspace-write escalation without a high-risk rule
+  request: run the tests
+  command: npm test
+  ```
 - **Auto permission icon**: on load, the plugin automatically adds an `auto-review` icon (shield + sparkle) to the installed DSH permission selector, matching the built-in presets. Re-applies automatically after upgrading or reinstalling dsh; a browser hard refresh picks it up.
 - **Approval waterfall prepend**: uses `ctx.on('approval/request', handler, true)` to place the reviewer before the interactive UI answerer; returning `allowed-once`/`rejected` decides immediately, while calling `next()` falls through to the normal human confirmation prompt.
 - **Multi-level safety policy**:
@@ -51,6 +60,7 @@ Note: `dsh plugin add /path/to/dir` installs through a `link:` to that directory
 npm install          # install dev deps such as typescript / @types/node
 npm run link-host    # symlink node_modules/@deepseek-ai to the installed dsh host packages (avoids duplicate copies)
 npm run build        # src/ → lib/ (the repo already ships the compiled output; regular users don't need to build)
+npm test             # node:test unit tests: notice formatting and decision branches
 ```
 
 After install/injection, **fully restart DeepSeek Harness**, open a new session, and select **auto-review** in the permission picker.

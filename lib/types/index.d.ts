@@ -64,6 +64,30 @@ export declare const Config: z<Schemastery.ObjectS<{
     blocklistMode: z<"reject" | "ask", "reject" | "ask">;
     extraInstructions: z<string, string>;
 }>>;
+export interface LlmDecision {
+    action: 'allow' | 'ask' | 'reject';
+    /** Reviewer's short rationale, flattened and bounded for notices. */
+    reason?: string;
+}
+export declare function parseLlmDecision(text: string): LlmDecision | null;
+/** One automatic approval decision, rendered as a notice. */
+export interface ApprovalNotice {
+    outcome: 'approved' | 'denied';
+    risk: 'low' | 'medium' | 'high' | 'critical';
+    authorization: 'user-confirmed' | 'unknown';
+    toolName: string;
+    mode?: string;
+    /** Why the reviewer decided this way (rule name, fast path, or LLM rationale). */
+    basis: string;
+    /** The requester's own justification, when present. */
+    request?: string;
+    /** Single-line rendering of the tool arguments; empty when unavailable. */
+    command: string;
+}
+/** Multi-line, human-readable account of one automatic approval decision. */
+export declare function formatApprovalNotice(notice: ApprovalNotice): string;
+/** One-line collapsed-row summary for the same decision. */
+export declare function approvalNoticeSummary(notice: ApprovalNotice): string;
 /** Pure text transform backing the on-load patch. Returns the input unchanged
  * when the `auto-review` glyph is already present; throws when the current DSH
  * bundle layout is unrecognized so callers can surface the skip reason. */

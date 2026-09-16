@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { BlockAssembler, boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ApprovalRequest, ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import '@deepseek-ai/dsh-permission-presets'
 import z from '@deepseek-ai/schemastery'
@@ -66,6 +66,8 @@ interface ReviewInput {
   requestedMode?: string
   justification?: string
   commandText: string
+  /** Single-line, truncated rendering of the tool arguments for notices. */
+  commandSummary: string
   recentUserText: string
   hasExplicitUserConfirmation: boolean
 }
@@ -76,43 +78,85 @@ const CONFIRM_PATTERNS = [
   /^\s*(yes|y|ok|okay|sure|fine)\b/i,
 ]
 
-const HIGH_RISK_PATTERNS = [
-  /\brm\s+-rf?\s+(\/|\/[*?]|~|\.\.[\\/])/i,
-  /\bmkfs(\.\w+)?\b/,
-  /\bdd\b.*\bof=\/dev\//i,
-  /curl\b.*\|\s*(ba)?sh/i,
-  /wget\b.*\|\s*(ba)?sh/i,
-  /\bsudo\b/,
-  /\bchmod\b.*(-R\s+)?777/i,
-  /\bchown\b.*-R/i,
-  />\s*\/dev\/(sd|nvme|disk)/i,
-  /:\s*\(\)\s*\{\s*:\|\s*:&\s*\};/i,
-  /Remove-Item.*-Recurse.*-Force/i,
-  /del\s+\/f\s+\/s/i,
-  /format\s+[a-z]:/i,
-  /git\s+push.*--force/i,
-  /npm\s+publish/i,
-  /gh\s+release\s+create/i,
-  /kubectl\s+delete/i,
-  /systemctl\s+(stop|disable|mask)/i,
-  /passwd\b/,
-  /shutdown|reboot|halt/i,
+interface RiskRule {
+  name: string
+  pattern: RegExp
+}
+
+const HIGH_RISK_RULES: RiskRule[] = [
+  { name: 'recursive-delete-root', pattern: /\brm\s+-rf?\s+(\/|\/[*?]|~|\.\.[\\/])/i },
+  { name: 'mkfs', pattern: /\bmkfs(\.\w+)?\b/ },
+  { name: 'raw-disk-write', pattern: /\bdd\b.*\bof=\/dev\//i },
+  { name: 'curl-pipe-shell', pattern: /curl\b.*\|\s*(ba)?sh/i },
+  { name: 'wget-pipe-shell', pattern: /wget\b.*\|\s*(ba)?sh/i },
+  { name: 'sudo', pattern: /\bsudo\b/ },
+  { name: 'chmod-777', pattern: /\bchmod\b.*(-R\s+)?777/i },
+  { name: 'recursive-chown', pattern: /\bchown\b.*-R/i },
+  { name: 'raw-device-redirect', pattern: />\s*\/dev\/(sd|nvme|disk)/i },
+  { name: 'fork-bomb', pattern: /:\s*\(\)\s*\{\s*:\|\s*:&\s*\};/i },
+  { name: 'powershell-recursive-delete', pattern: /Remove-Item.*-Recurse.*-Force/i },
+  { name: 'windows-force-delete', pattern: /del\s+\/f\s+\/s/i },
+  { name: 'format-drive', pattern: /format\s+[a-z]:/i },
+  { name: 'git-force-push', pattern: /git\s+push.*--force/i },
+  { name: 'npm-publish', pattern: /npm\s+publish/i },
+  { name: 'gh-release-create', pattern: /gh\s+release\s+create/i },
+  { name: 'kubectl-delete', pattern: /kubectl\s+delete/i },
+  { name: 'systemctl-stop', pattern: /systemctl\s+(stop|disable|mask)/i },
+  { name: 'passwd', pattern: /passwd\b/ },
+  { name: 'power-control', pattern: /shutdown|reboot|halt/i },
 ]
 
-const CRITICAL_RISK_PATTERNS = [
-  /\brm\s+-rf?\s+(\/|\/[*?]|~|\.\.)/i,
-  /\bmkfs(\.\w+)?\b/,
-  /\bdd\b.*\bof=\/dev\//i,
-  /curl\b.*\|\s*(ba)?sh/i,
-  /wget\b.*\|\s*(ba)?sh/i,
-  /:\s*\(\)\s*\{\s*:\|\s*:&\s*\};/i,
-  />\s*\/dev\/(sd|nvme|disk)/i,
-  /Remove-Item.*-Recurse.*-Force/i,
-  /format\s+[a-z]:/i,
+const CRITICAL_RISK_RULES: RiskRule[] = [
+  { name: 'recursive-delete-root', pattern: /\brm\s+-rf?\s+(\/|\/[*?]|~|\.\.)/i },
+  { name: 'mkfs', pattern: /\bmkfs(\.\w+)?\b/ },
+  { name: 'raw-disk-write', pattern: /\bdd\b.*\bof=\/dev\//i },
+  { name: 'curl-pipe-shell', pattern: /curl\b.*\|\s*(ba)?sh/i },
+  { name: 'wget-pipe-shell', pattern: /wget\b.*\|\s*(ba)?sh/i },
+  { name: 'fork-bomb', pattern: /:\s*\(\)\s*\{\s*:\|\s*:&\s*\};/i },
+  { name: 'raw-device-redirect', pattern: />\s*\/dev\/(sd|nvme|disk)/i },
+  { name: 'powershell-recursive-delete', pattern: /Remove-Item.*-Recurse.*-Force/i },
+  { name: 'format-drive', pattern: /format\s+[a-z]:/i },
 ]
 
 function matchesAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text))
+}
+
+function firstRuleMatch(text: string, rules: RiskRule[]): RiskRule | null {
+  for (const rule of rules) if (rule.pattern.test(text)) return rule
+  return null
+}
+
+/** Bound for notice detail lines (rule names, LLM reasons, request text). */
+const NOTICE_DETAIL_MAX_CHARS = 160
+/** Bound for the single-line command rendering inside a notice. */
+const NOTICE_COMMAND_MAX_CHARS = 160
+
+/** Flatten untrusted text (tool args, LLM output) to one bounded line. */
+function oneLine(text: string, maxChars: number): string {
+  const flat = text
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return flat.length > maxChars ? `${flat.slice(0, Math.max(0, maxChars - 1))}…` : flat
+}
+
+function summarizeToolArguments(toolName: string, args: Record<string, unknown> | null): string {
+  if (!args) return ''
+  const bashLike = /bash|shell|pwsh|powershell|exec|run/i.test(toolName)
+  const preferred = bashLike
+    ? ['command', 'cmd', 'script', 'args']
+    : ['path', 'file_path', 'filePath', 'file', 'target', 'command', 'cmd', 'pattern', 'url']
+  for (const key of preferred) {
+    const value = args[key]
+    if (typeof value === 'string' && value.trim() !== '') return oneLine(value, NOTICE_COMMAND_MAX_CHARS)
+  }
+  try {
+    return oneLine(JSON.stringify(args), NOTICE_COMMAND_MAX_CHARS)
+  } catch {
+    return ''
+  }
 }
 
 function textOfMessage(message: { content?: { type: string; text?: string }[] }): string {
@@ -160,6 +204,7 @@ function buildReviewInput(req: ApprovalRequest, config: Config): ReviewInput {
     args ? JSON.stringify(args) : '',
     req.reason ?? '',
   ].filter(Boolean).join('\n')
+  const commandSummary = summarizeToolArguments(req.toolName, args)
 
   const reason = req.reason ?? ''
   const requestedMode = /escalate sandbox to (workspace-write|danger-full-access)/.exec(reason)?.[1]
@@ -175,42 +220,92 @@ function buildReviewInput(req: ApprovalRequest, config: Config): ReviewInput {
     requestedMode,
     justification,
     commandText,
+    commandSummary,
     recentUserText,
     hasExplicitUserConfirmation,
   }
 }
 
-function parseLlmDecision(text: string): 'allow' | 'ask' | 'reject' | null {
+export interface LlmDecision {
+  action: 'allow' | 'ask' | 'reject'
+  /** Reviewer's short rationale, flattened and bounded for notices. */
+  reason?: string
+}
+
+export function parseLlmDecision(text: string): LlmDecision | null {
   const cleaned = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim()
   const match = cleaned.match(/\{[\s\S]*\}/)
   if (!match) return null
   try {
-    const parsed = JSON.parse(match[0])
+    const parsed = JSON.parse(match[0]) as { action?: unknown; reason?: unknown }
     const action = String(parsed.action ?? '').toLowerCase()
-    if (action === 'allow' || action === 'allowed-once') return 'allow'
-    if (action === 'reject' || action === 'rejected') return 'reject'
-    if (action === 'ask') return 'ask'
+    const reason = typeof parsed.reason === 'string' && parsed.reason.trim() !== ''
+      ? oneLine(parsed.reason, NOTICE_DETAIL_MAX_CHARS)
+      : undefined
+    if (action === 'allow' || action === 'allowed-once') return { action: 'allow', ...(reason ? { reason } : {}) }
+    if (action === 'reject' || action === 'rejected') return { action: 'reject', ...(reason ? { reason } : {}) }
+    if (action === 'ask') return { action: 'ask', ...(reason ? { reason } : {}) }
   } catch {
     return null
   }
   return null
 }
 
-const APPROVAL_APPROVED_NOTICE = 'Automatic approval review approved (risk: low, authorization: unknown): Auto-review returned a low-risk allow decision.'
-const APPROVAL_DENIED_NOTICE = 'Automatic approval review denied (risk: high, authorization: unknown): Auto-review returned a high-risk deny decision.'
+/** One automatic approval decision, rendered as a notice. */
+export interface ApprovalNotice {
+  outcome: 'approved' | 'denied'
+  risk: 'low' | 'medium' | 'high' | 'critical'
+  authorization: 'user-confirmed' | 'unknown'
+  toolName: string
+  mode?: string
+  /** Why the reviewer decided this way (rule name, fast path, or LLM rationale). */
+  basis: string
+  /** The requester's own justification, when present. */
+  request?: string
+  /** Single-line rendering of the tool arguments; empty when unavailable. */
+  command: string
+}
+
+/** Multi-line, human-readable account of one automatic approval decision. */
+export function formatApprovalNotice(notice: ApprovalNotice): string {
+  const lines = [
+    `Automatic approval review ${notice.outcome} (risk: ${notice.risk}, authorization: ${notice.authorization})`,
+    `tool: ${notice.toolName}`,
+  ]
+  if (notice.mode) lines.push(`mode: ${notice.mode}`)
+  lines.push(`basis: ${notice.basis}`)
+  if (notice.request) lines.push(`request: ${notice.request}`)
+  lines.push(`command: ${notice.command || '(unavailable)'}`)
+  return lines.join('\n')
+}
+
+/** One-line collapsed-row summary for the same decision. */
+export function approvalNoticeSummary(notice: ApprovalNotice): string {
+  const parts = [`${notice.outcome}(${notice.risk})`, notice.toolName]
+  if (notice.mode) parts.push(notice.mode)
+  parts.push(notice.command || notice.basis)
+  return oneLine(parts.join(' · '), 200)
+}
 
 /**
 * Best-effort UI notice: inject a plugin-sourced message into the agent's
-* next-step inbox so the transcript shows the auto-approval decision
-* (Codex-style). The agent loop appends it at the next safe step boundary,
-* after all tool results, so it never breaks the assistant tool-call ->
-* tool-result pairing; failures are swallowed.
+* next-step inbox so the transcript shows the auto-approval decision. The
+* `notice` context form carries a one-line summary for the collapsed row;
+* the full body (tool, mode, basis, command) renders when expanded. The
+* agent loop appends it at the next safe step boundary, after all tool
+* results, so it never breaks the assistant tool-call -> tool-result
+* pairing; failures are swallowed.
 */
-function injectApprovalNotice(req: ApprovalRequest, text: string): void {
+function injectApprovalNotice(req: ApprovalRequest, notice: ApprovalNotice): void {
   try {
     req.agent.inject(createUserMessage({
-      content: [{ type: 'text', text }],
-      source: { kind: 'plugin', plugin: name },
+      content: [{ type: 'text', text: formatApprovalNotice(notice) }],
+      source: {
+        kind: 'plugin',
+        plugin: name,
+        form: 'notice',
+        summary: boundContextSummary(approvalNoticeSummary(notice)),
+      },
     }))
   } catch {
     // Best-effort UI notice; never affect the approval outcome.
@@ -222,7 +317,7 @@ async function runLlmReview(
   req: ApprovalRequest,
   input: ReviewInput,
   config: Config,
-): Promise<'allow' | 'ask' | 'reject' | null> {
+): Promise<LlmDecision | null> {
   if (!config.useLlm) return null
   const header = req.agent.session.requestHeader?.()
   const provider = config.llmProvider || header?.config?.provider
@@ -402,57 +497,72 @@ export function apply(ctx: Context, config: Config): void {
       }
 
       const input = buildReviewInput(req, config)
+      const noticeBase = {
+        authorization: (input.hasExplicitUserConfirmation ? 'user-confirmed' : 'unknown') as ApprovalNotice['authorization'],
+        toolName: input.toolName,
+        mode: input.requestedMode,
+        request: input.justification ? oneLine(input.justification, NOTICE_DETAIL_MAX_CHARS) : undefined,
+        command: input.commandSummary,
+      }
+      const approve = (risk: ApprovalNotice['risk'], basis: string): ApprovalOutcome => {
+        injectApprovalNotice(req, { ...noticeBase, outcome: 'approved', risk, basis })
+        return 'allowed-once'
+      }
+      const deny = (risk: ApprovalNotice['risk'], basis: string): ApprovalOutcome => {
+        injectApprovalNotice(req, { ...noticeBase, outcome: 'denied', risk, basis })
+        return 'rejected'
+      }
 
       // Blocklist: user-configured hard rules.
-      if (config.blocklist.length > 0 && matchesAny(input.commandText, config.blocklist.map((source) => new RegExp(source, 'i')))) {
+      let blocklistIndex = -1
+      for (let index = 0; index < config.blocklist.length; index += 1) {
+        // Invalid patterns still fail safe through the outer catch.
+        if (new RegExp(config.blocklist[index], 'i').test(input.commandText)) {
+          blocklistIndex = index
+          break
+        }
+      }
+      if (blocklistIndex >= 0) {
         if (config.blocklistMode === 'reject') {
-          injectApprovalNotice(req, APPROVAL_DENIED_NOTICE)
-          return 'rejected'
+          return deny('high', `blocklist rule #${blocklistIndex + 1}: ${oneLine(config.blocklist[blocklistIndex], 80)}`)
         }
         return next()
       }
 
-      const highRisk = matchesAny(input.commandText, HIGH_RISK_PATTERNS)
-      const criticalRisk = matchesAny(input.commandText, CRITICAL_RISK_PATTERNS)
+      const highRiskRule = firstRuleMatch(input.commandText, HIGH_RISK_RULES)
+      const criticalRule = firstRuleMatch(input.commandText, CRITICAL_RISK_RULES)
 
       // Critical destructive operations: reject unless the user explicitly confirmed.
-      if (criticalRisk && !input.hasExplicitUserConfirmation && config.rejectCritical) {
-        injectApprovalNotice(req, APPROVAL_DENIED_NOTICE)
-        return 'rejected'
+      if (criticalRule && !input.hasExplicitUserConfirmation && config.rejectCritical) {
+        return deny('critical', `critical rule: ${criticalRule.name}; no explicit user confirmation`)
       }
 
       // Fast auto-approve paths.
-      if (input.requestedMode === 'workspace-write' && config.autoApproveWorkspaceWrite && !highRisk) {
-        injectApprovalNotice(req, APPROVAL_APPROVED_NOTICE)
-        return 'allowed-once'
+      if (input.requestedMode === 'workspace-write' && config.autoApproveWorkspaceWrite && !highRiskRule) {
+        return approve('low', 'auto-approve: workspace-write escalation without a high-risk rule')
       }
-      if (input.requestedMode === 'danger-full-access' && config.autoApproveDangerFullAccess && !highRisk) {
-        injectApprovalNotice(req, APPROVAL_APPROVED_NOTICE)
-        return 'allowed-once'
+      if (input.requestedMode === 'danger-full-access' && config.autoApproveDangerFullAccess && !highRiskRule) {
+        return approve('low', 'auto-approve: danger-full-access escalation without a high-risk rule')
       }
-      if (input.hasExplicitUserConfirmation && config.autoApproveUserConfirmed && !criticalRisk) {
-        injectApprovalNotice(req, APPROVAL_APPROVED_NOTICE)
-        return 'allowed-once'
+      if (input.hasExplicitUserConfirmation && config.autoApproveUserConfirmed && !criticalRule) {
+        return approve(highRiskRule ? 'medium' : 'low', 'auto-approve: explicit user confirmation in recent messages')
       }
 
       // Ambiguous middle ground: ask the reviewer LLM.
       const decision = await runLlmReview(ctx, req, input, config)
-      if (decision === 'allow') {
-        injectApprovalNotice(req, APPROVAL_APPROVED_NOTICE)
-        return 'allowed-once'
+      const llmReason = decision?.reason ? `: ${decision.reason}` : ''
+      if (decision?.action === 'allow') {
+        return approve(highRiskRule ? 'medium' : 'low', `llm review (allow)${llmReason}`)
       }
-      if (decision === 'reject') {
-        injectApprovalNotice(req, APPROVAL_DENIED_NOTICE)
-        return 'rejected'
+      if (decision?.action === 'reject') {
+        return deny(criticalRule || highRiskRule ? 'high' : 'medium', `llm review (reject)${llmReason}`)
       }
-      if (decision === 'ask') {
+      if (decision?.action === 'ask') {
         if (config.askOnAmbiguous) return next()
-        injectApprovalNotice(req, APPROVAL_DENIED_NOTICE)
-        return 'rejected'
+        return deny(highRiskRule ? 'high' : 'medium', `llm review (ask)${llmReason}; askOnAmbiguous=false`)
       }
       if (config.askOnAmbiguous) return next()
-      injectApprovalNotice(req, APPROVAL_DENIED_NOTICE)
-      return 'rejected'
+      return deny(highRiskRule ? 'high' : 'medium', 'llm reviewer unavailable or inconclusive; askOnAmbiguous=false')
     } catch {
       // Any reviewer failure must fail safe: ask the user.
       return next()
