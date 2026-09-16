@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-auto-reviewer",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Codex-style auto reviewer (approve for me) permission mode for DSH",
   "private": true,
   "type": "module",
