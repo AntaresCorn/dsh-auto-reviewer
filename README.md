@@ -58,6 +58,8 @@ dsh plugin --profile web add /path/to/dsh-auto-reviewer
 
 兼容性：peerDependencies 覆盖 dsh `0.0.1-rc` ~ `0.2.x` 预发布运行时；dsh ≥ 0.2 要求消息 source 带“生产者自有 kind”，本插件使用 `dsh-auto-reviewer`（旧格式会由 dsh 的会话格式迁移自动转换）。
 
+本版还带一个客户端半边（`client/client.js`）负责渲染提示行：只有运行时具备 client 模块系统（dsh ≥ 0.1.5 起）才会加载它，缺少它的旧运行时不加载也不受影响——提示继续由内置的「上下文注入」行显示。版本与变更见 [Releases](https://github.com/AntaresCorn/dsh-auto-reviewer/releases)。
+
 ### 本地构建
 
 ```bash
@@ -68,6 +70,8 @@ npm test             # node:test 单测：审批通知格式化、各决策分�
 ```
 
 安装/注入后**必须完全重启 DeepSeek Harness**，新建会话，在权限选择器中选择 **auto-review**。
+
+重启后端之后请再刷新一次浏览器页面：客户端 bundle 带 `rev` 参数，普通刷新即可；这样连此前会话里已经记录的通知也会以行形式显示出来。
 
 > ⚠️ 经验教训（2026-08-16 实测）：不要在运行中的对话里用 `dev_install_package` / `dev_inject_plugin` 热装载后继续对话。
 > 热装载路径与正式 bundle 装配路径不一致，可能导致 loader/agent 上下文损坏（`Cannot read properties of undefined (reading 'enabled')`）。
@@ -117,10 +121,11 @@ npm test             # node:test 单测：审批通知格式化、各决策分�
 dsh-auto-reviewer/
 ├── client/client.js      # 客户端半边：把自动审批提示渲染成对话中的一行
 ├── cordis.patch.yml      # 扩展权限表 + 装配插件
-├── package.json          # 插件包元数据（dsh.bundle.patch）
+├── package.json          # 插件包元数据（dsh.bundle.patch + dsh.client）
 ├── scripts/build.sh      # tsc 构建脚本（无需 DSH checkout）
 ├── scripts/link-host-deps.sh # 软链宿主 @deepseek-ai 依赖（避免重复副本）
 ├── src/index.ts          # 自动审查实现
+├── test/                 # node:test 单测（宿主决策分支 + 客户端提示行 bundle）
 ├── README.md             # 中文说明
 └── README.en.md          # English README
 ```

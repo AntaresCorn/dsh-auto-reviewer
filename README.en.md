@@ -58,6 +58,8 @@ Note: `dsh plugin add /path/to/dir` installs through a `link:` to that directory
 
 Compatibility: peerDependencies cover dsh prereleases from `0.0.1-rc` through `0.2.x`. On dsh ≥ 0.2 every persisted message source must carry a producer-owned kind, so the notices use `dsh-auto-reviewer` (dsh's session-format migration rewrites older logs automatically).
 
+This version also ships a client half (`client/client.js`) that renders the notice row. It is only loaded by a runtime with the client module system (dsh ≥ 0.1.5); older runtimes simply don't load it and are unaffected — their built-in "Context injection" row keeps showing the notice. Versions and changes: [Releases](https://github.com/AntaresCorn/dsh-auto-reviewer/releases).
+
 ### Local build
 
 ```bash
@@ -68,6 +70,8 @@ npm test             # node:test unit tests: notice formatting, decision branche
 ```
 
 After install/injection, **fully restart DeepSeek Harness**, open a new session, and select **auto-review** in the permission picker.
+
+Reload the browser page once after the backend restart: the client bundle is `rev`-stamped, so an ordinary reload suffices — notices already recorded in earlier sessions then render as rows too.
 
 > ⚠️ Lesson learned (tested 2026-08-16): do not hot-load the plugin with `dev_install_package` / `dev_inject_plugin` during a running conversation and continue using it. The hot-load path is inconsistent with the official bundle assembly and can corrupt loader/agent context (`Cannot read properties of undefined (reading 'enabled')`). Install through the official `dsh plugin --profile web add <dir>` and then `systemctl --user restart dsh-web` (or your equivalent restart method). The dev directory's `node_modules` is for local build/typecheck only; don't let it become the runtime dependency source for a profile link.
 
@@ -114,10 +118,11 @@ The plugin's default configuration is provided in `cordis.patch.yml`. You can ov
 dsh-auto-reviewer/
 ├── client/client.js          # client half: renders the notice row in the transcript
 ├── cordis.patch.yml          # extends permission presets + mounts the plugin
-├── package.json              # plugin package metadata (dsh.bundle.patch)
+├── package.json              # plugin package metadata (dsh.bundle.patch + dsh.client)
 ├── scripts/build.sh          # tsc build script (no DSH checkout required)
 ├── scripts/link-host-deps.sh # symlinks host @deepseek-ai deps (avoids duplicates)
 ├── src/index.ts              # auto-review implementation
+├── test/                     # node:test unit tests (host decision branches + notice-row bundle)
 ├── README.md                 # Chinese README
 └── README.en.md              # English README
 ```
