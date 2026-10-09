@@ -24,7 +24,7 @@ A permission mode for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek
   request: run the tests
   command: npm test
   ```
-- **Auto permission icon**: on load, the plugin automatically adds an `auto-review` icon (shield + sparkle) to the installed DSH permission selector, matching the built-in presets. Re-applies automatically after upgrading or reinstalling dsh; a browser hard refresh picks it up.
+- **Auto permission icon**: on load, the plugin automatically adds an `auto-review` icon (shield + sparkle) to the installed DSH permission selector, matching the built-in presets. It patches the selector bundle of the installed dsh (`@deepseek-ai/dsh-client-ui-permission-presets` on dsh ≥ 0.2, the conversation bundle before that). Re-applies automatically after upgrading or reinstalling dsh; a browser hard refresh picks it up.
 - **Approval waterfall prepend**: uses `ctx.on('approval/request', handler, true)` to place the reviewer before the interactive UI answerer; returning `allowed-once`/`rejected` decides immediately, while calling `next()` falls through to the normal human confirmation prompt.
 - **Multi-level safety policy**:
   - Fast approve: `workspace-write` escalation that is not high risk;
@@ -53,6 +53,8 @@ dsh plugin --profile web add /path/to/dsh-auto-reviewer
 ```
 
 Note: `dsh plugin add /path/to/dir` installs through a `link:` to that directory, so you must run `npm install` and `npm run link-host` in the repo before installing.
+
+Compatibility: peerDependencies cover dsh prereleases from `0.0.1-rc` through `0.2.x`. On dsh ≥ 0.2 every persisted message source must carry a producer-owned kind, so the notices use `dsh-auto-reviewer` (dsh's session-format migration rewrites older logs automatically).
 
 ### Local build
 

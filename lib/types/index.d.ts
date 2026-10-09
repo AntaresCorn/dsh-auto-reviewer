@@ -1,8 +1,17 @@
 import type { Context } from '@deepseek-ai/cordis';
+import type { ContextFormed } from '@deepseek-ai/dsh-llm';
 import '@deepseek-ai/dsh-permission-presets';
 import z from '@deepseek-ai/schemastery';
 export declare const name = "@dsh-external/dsh-auto-reviewer";
 export declare const inject: string[];
+declare module '@deepseek-ai/dsh-llm' {
+    interface MessageSourceMap {
+        /** Auto-review decision notices injected into the transcript. */
+        'dsh-auto-reviewer': {
+            kind: 'dsh-auto-reviewer';
+        } & ContextFormed;
+    }
+}
 export interface Config {
     /** The permission preset name this plugin implements. */
     presetName: string;
@@ -33,37 +42,37 @@ export interface Config {
     /** Extra reviewer instructions appended to the LLM system prompt. */
     extraInstructions: string;
 }
-export declare const Config: z<Schemastery.ObjectS<{
-    presetName: z<string, string>;
-    llmProvider: z<string, string>;
-    llmModel: z<string, string>;
-    maxContextMessages: z<number, number>;
-    autoApproveWorkspaceWrite: z<boolean, boolean>;
-    autoApproveDangerFullAccess: z<boolean, boolean>;
-    autoApproveUserConfirmed: z<boolean, boolean>;
-    askOnAmbiguous: z<boolean, boolean>;
-    rejectCritical: z<boolean, boolean>;
-    useLlm: z<boolean, boolean>;
-    timeoutMs: z<number, number>;
-    blocklist: z<string[], string[]>;
-    blocklistMode: z<"reject" | "ask", "reject" | "ask">;
-    extraInstructions: z<string, string>;
-}>, Schemastery.ObjectT<{
-    presetName: z<string, string>;
-    llmProvider: z<string, string>;
-    llmModel: z<string, string>;
-    maxContextMessages: z<number, number>;
-    autoApproveWorkspaceWrite: z<boolean, boolean>;
-    autoApproveDangerFullAccess: z<boolean, boolean>;
-    autoApproveUserConfirmed: z<boolean, boolean>;
-    askOnAmbiguous: z<boolean, boolean>;
-    rejectCritical: z<boolean, boolean>;
-    useLlm: z<boolean, boolean>;
-    timeoutMs: z<number, number>;
-    blocklist: z<string[], string[]>;
-    blocklistMode: z<"reject" | "ask", "reject" | "ask">;
-    extraInstructions: z<string, string>;
-}>>;
+export declare const Config: z<Schemastery.ObjectS<NoInfer<{
+    presetName: z<string, string, "defined">;
+    llmProvider: z<string, string, "defined">;
+    llmModel: z<string, string, "defined">;
+    maxContextMessages: z<number, number, "defined">;
+    autoApproveWorkspaceWrite: z<boolean, boolean, "defined">;
+    autoApproveDangerFullAccess: z<boolean, boolean, "defined">;
+    autoApproveUserConfirmed: z<boolean, boolean, "defined">;
+    askOnAmbiguous: z<boolean, boolean, "defined">;
+    rejectCritical: z<boolean, boolean, "defined">;
+    useLlm: z<boolean, boolean, "defined">;
+    timeoutMs: z<number, number, "defined">;
+    blocklist: z<string[], string[], "defined">;
+    blocklistMode: z<"reject" | "ask", "reject" | "ask", "defined">;
+    extraInstructions: z<string, string, "defined">;
+}>>, Schemastery.ObjectT<NoInfer<{
+    presetName: z<string, string, "defined">;
+    llmProvider: z<string, string, "defined">;
+    llmModel: z<string, string, "defined">;
+    maxContextMessages: z<number, number, "defined">;
+    autoApproveWorkspaceWrite: z<boolean, boolean, "defined">;
+    autoApproveDangerFullAccess: z<boolean, boolean, "defined">;
+    autoApproveUserConfirmed: z<boolean, boolean, "defined">;
+    askOnAmbiguous: z<boolean, boolean, "defined">;
+    rejectCritical: z<boolean, boolean, "defined">;
+    useLlm: z<boolean, boolean, "defined">;
+    timeoutMs: z<number, number, "defined">;
+    blocklist: z<string[], string[], "defined">;
+    blocklistMode: z<"reject" | "ask", "reject" | "ask", "defined">;
+    extraInstructions: z<string, string, "defined">;
+}>>, "plain">;
 export interface LlmDecision {
     action: 'allow' | 'ask' | 'reject';
     /** Reviewer's short rationale, flattened and bounded for notices. */

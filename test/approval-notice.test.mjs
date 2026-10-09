@@ -8,6 +8,7 @@ import {
   approvalNoticeSummary,
   formatApprovalNotice,
   parseLlmDecision,
+  patchPermissionIconSource,
 } from '../lib/index.js'
 
 // Keep the on-load icon patch hermetic: point PATH at a fake `npm` whose
@@ -139,7 +140,7 @@ test('workspace-write fast path injects a structured notice', async () => {
   assert.equal(outcome, 'allowed-once')
   assert.equal(req.injected.length, 1)
   const message = req.injected[0]
-  assert.equal(message.source.kind, 'plugin')
+  assert.equal(message.source.kind, 'dsh-auto-reviewer')
   assert.equal(message.source.form, 'notice')
   assert.equal(typeof message.source.summary, 'string')
   assert.ok(message.source.summary.length > 0 && message.source.summary.length <= 120)
@@ -185,4 +186,34 @@ test('ambiguous fallback still asks the user without a notice', async () => {
   const outcome = await handler(req, askForUser)
   assert.equal(outcome, 'ask')
   assert.equal(req.injected.length, 0)
+})
+
+test('patchPermissionIconSource adapts to the dsh 0.2 picker bundle', () => {
+  const modern = [
+    '\t\tconst permissionGlyphs = new Map([',
+    '\t\t\t["read-only", (0, react_jsx_runtime.jsx)(primitives.PermissionIconReadOnlyRegular, {})],',
+    '\t\t\t[FULL_ACCESS_PRESET, (0, react_jsx_runtime.jsx)(primitives.PermissionIconFullAccessRegular, {})]',
+    '\t\t]);',
+    '\t\tfunction permissionGlyph(value) {',
+    '\t\t\treturn permissionGlyphs.get(value);',
+    '\t\t}',
+  ].join('\n')
+  const patched = patchPermissionIconSource(modern)
+  assert.match(patched, /\["auto-review", \(0, react_jsx_runtime\.jsxs\)\("svg", \{/)
+  assert.match(patched, /d: "M6\.59624/)
+  assert.ok(patched.includes('FULL_ACCESS_PRESET, (0, react_jsx_runtime.jsx)(primitives.PermissionIconFullAccessRegular, {})],'))
+  assert.equal(patchPermissionIconSource(patched), patched)
+  assert.throws(() => patchPermissionIconSource('const nothing = true;'), /icon anchor not found/)
+})
+
+test('patchPermissionIconSource keeps the legacy conversation bundle working', () => {
+  const legacy = [
+    'const glyphs = {',
+    '\t"read-only": (0, react_jsx_runtime.jsx)("svg", { d: "M9.10094 9.8114V11.5H7.59888V9.8114H9.10094Z", })',
+    '};',
+  ].join('\n')
+  const patched = patchPermissionIconSource(legacy)
+  assert.ok(patched.includes('"auto-review": (0, react_jsx_runtime.jsxs)("svg", {'))
+  assert.ok(patched.includes('d: shieldOutline,'))
+  assert.equal(patchPermissionIconSource(patched), patched)
 })
