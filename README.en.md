@@ -24,6 +24,8 @@ A permission mode for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek
   request: run the tests
   command: npm test
   ```
+
+  On dsh ≥ 0.2 the client half of the plugin (`client/client.js`) renders this message as a transcript row — collapsed it shows "Auto-review approved / Auto-review denied" plus the one-line summary, expanded it shows the full detail. The 0.2 Chat no longer shows plain injected-context rows (only those carrying tool additions/removals), so the plugin registers a conversation node kind of its own; on earlier dsh the built-in "Context injection" row already shows the message, and the plugin detects that Chat generation and skips its registration to avoid a duplicate row.
 - **Auto permission icon**: on load, the plugin automatically adds an `auto-review` icon (shield + sparkle) to the installed DSH permission selector, matching the built-in presets. It patches the selector bundle of the installed dsh (`@deepseek-ai/dsh-client-ui-permission-presets` on dsh ≥ 0.2, the conversation bundle before that). Re-applies automatically after upgrading or reinstalling dsh; a browser hard refresh picks it up.
 - **Approval waterfall prepend**: uses `ctx.on('approval/request', handler, true)` to place the reviewer before the interactive UI answerer; returning `allowed-once`/`rejected` decides immediately, while calling `next()` falls through to the normal human confirmation prompt.
 - **Multi-level safety policy**:
@@ -62,7 +64,7 @@ Compatibility: peerDependencies cover dsh prereleases from `0.0.1-rc` through `0
 npm install          # install dev deps such as typescript / @types/node
 npm run link-host    # symlink node_modules/@deepseek-ai to the installed dsh host packages (avoids duplicate copies)
 npm run build        # src/ → lib/ (the repo already ships the compiled output; regular users don't need to build)
-npm test             # node:test unit tests: notice formatting and decision branches
+npm test             # node:test unit tests: notice formatting, decision branches, notice-row bundle
 ```
 
 After install/injection, **fully restart DeepSeek Harness**, open a new session, and select **auto-review** in the permission picker.
@@ -110,6 +112,7 @@ The plugin's default configuration is provided in `cordis.patch.yml`. You can ov
 
 ```
 dsh-auto-reviewer/
+├── client/client.js          # client half: renders the notice row in the transcript
 ├── cordis.patch.yml          # extends permission presets + mounts the plugin
 ├── package.json              # plugin package metadata (dsh.bundle.patch)
 ├── scripts/build.sh          # tsc build script (no DSH checkout required)
